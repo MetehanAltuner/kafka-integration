@@ -1,17 +1,20 @@
-FROM eclipse-temurin:17-jdk-alpine
+FROM maven:3.9.0-openjdk-17 AS builder
 
 WORKDIR /app
 
-# Kaynak kodunu ve bağımlılıkları kopyalayın
-COPY src/ /app/src/
-COPY pom.xml /app/
+COPY pom.xml .
+COPY src ./src
 
-# Maven kurulum komutları (Alpine için gerekli olabilir)
-RUN apk add --no-cache maven
+RUN mvn clean package -DskipTests
 
-# Projeyi derle ve JAR dosyasını oluştur
-RUN mvn -f /app/pom.xml clean package
+FROM openjdk:17-jdk-slim
 
-# JAR dosyasını çalıştır
+WORKDIR /app
+
+COPY --from=builder /app/target/*.jar kafka.jar
+
+ENV SPRING_PROFILES_ACTIVE=prod
+
 EXPOSE 8080
-CMD ["java", "-jar", "/app/target/kafka-1.0.0.jar"]
+
+ENTRYPOINT ["java", "-jar", "kafka.jar"]

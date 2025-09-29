@@ -4,8 +4,6 @@ public class DatabaseRequestDto {
 
     private String name;
     private String connectionUrl;
-    private String username;
-    private String password;
 
     // Getters and Setters
     public String getName() {
@@ -24,20 +22,5 @@ public class DatabaseRequestDto {
         this.connectionUrl = connectionUrl;
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
 }
 

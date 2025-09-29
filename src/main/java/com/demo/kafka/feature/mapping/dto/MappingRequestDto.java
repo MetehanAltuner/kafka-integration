@@ -3,10 +3,14 @@ package com.demo.kafka.feature.mapping.dto;
 public class MappingRequestDto {
 
     private Long topicId;
-    private String sourceColumn;
+
+    // ESKİ: private String sourceColumn;
+    // YENİ: sadece kolon ID'si gelsin (FK)
+    private Long sourceColumnId;
+
     private Long targetColumnId;
 
-    // Getters and Setters
+    // Getters & Setters
     public Long getTopicId() {
         return topicId;
     }
@@ -15,12 +19,12 @@ public class MappingRequestDto {
         this.topicId = topicId;
     }
 
-    public String getSourceColumn() {
-        return sourceColumn;
+    public Long getSourceColumnId() {
+        return sourceColumnId;
     }
 
-    public void setSourceColumn(String sourceColumn) {
-        this.sourceColumn = sourceColumn;
+    public void setSourceColumnId(Long sourceColumnId) {
+        this.sourceColumnId = sourceColumnId;
     }
 
     public Long getTargetColumnId() {
@@ -31,4 +35,3 @@ public class MappingRequestDto {
         this.targetColumnId = targetColumnId;
     }
 }
-

@@ -16,12 +16,13 @@ public class Mapping {
     @JoinColumn(name = "topic_id", nullable = false)
     private Topic topic;
 
-    @Column(nullable = false)
-    private String sourceColumn;
-
     @ManyToOne
     @JoinColumn(name = "target_column_id", nullable = false)
     private Columns targetColumn;
+
+    @ManyToOne
+    @JoinColumn(name = "source_column_id", nullable = false)
+    private Columns sourceColumn;
 
     // Getters and Setters
     public Long getId() {
@@ -40,11 +41,11 @@ public class Mapping {
         this.topic = topic;
     }
 
-    public String getSourceColumn() {
+    public Columns getSourceColumn() {
         return sourceColumn;
     }
 
-    public void setSourceColumn(String sourceColumn) {
+    public void setSourceColumn(Columns sourceColumn) {
         this.sourceColumn = sourceColumn;
     }
 

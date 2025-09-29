@@ -21,8 +21,6 @@ public class DatabaseService {
         Database database = new Database();
         database.setName(requestDto.getName());
         database.setConnectionUrl(requestDto.getConnectionUrl());
-        database.setUsername(requestDto.getUsername());
-        database.setPassword(requestDto.getPassword());
 
         Database savedDatabase = databaseRepository.save(database);
         return DatabaseResponseDto.fromEntity(savedDatabase);
@@ -46,8 +44,6 @@ public class DatabaseService {
 
         database.setName(requestDto.getName());
         database.setConnectionUrl(requestDto.getConnectionUrl());
-        database.setUsername(requestDto.getUsername());
-        database.setPassword(requestDto.getPassword());
 
         Database updatedDatabase = databaseRepository.save(database);
         return DatabaseResponseDto.fromEntity(updatedDatabase);

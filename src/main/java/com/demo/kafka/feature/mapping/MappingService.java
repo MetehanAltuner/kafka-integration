@@ -19,7 +19,9 @@ public class MappingService {
     private final TopicRepository topicRepository;
     private final ColumnsRepository columnsRepository;
 
-    public MappingService(MappingRepository mappingRepository, TopicRepository topicRepository, ColumnsRepository columnsRepository) {
+    public MappingService(MappingRepository mappingRepository,
+                          TopicRepository topicRepository,
+                          ColumnsRepository columnsRepository) {
         this.mappingRepository = mappingRepository;
         this.topicRepository = topicRepository;
         this.columnsRepository = columnsRepository;
@@ -28,12 +30,16 @@ public class MappingService {
     public MappingResponseDto createMapping(MappingRequestDto requestDto) {
         Topic topic = topicRepository.findById(requestDto.getTopicId())
                 .orElseThrow(() -> new ResourceNotFoundException("Topic not found"));
+
+        Columns sourceColumn = columnsRepository.findById(requestDto.getSourceColumnId())
+                .orElseThrow(() -> new ResourceNotFoundException("Source Column not found"));
+
         Columns targetColumn = columnsRepository.findById(requestDto.getTargetColumnId())
                 .orElseThrow(() -> new ResourceNotFoundException("Target Column not found"));
 
         Mapping mapping = new Mapping();
         mapping.setTopic(topic);
-        mapping.setSourceColumn(requestDto.getSourceColumn());
+        mapping.setSourceColumn(sourceColumn);   // <-- Artık Columns (FK)
         mapping.setTargetColumn(targetColumn);
 
         Mapping savedMapping = mappingRepository.save(mapping);
@@ -58,11 +64,15 @@ public class MappingService {
 
         Topic topic = topicRepository.findById(requestDto.getTopicId())
                 .orElseThrow(() -> new ResourceNotFoundException("Topic not found"));
+
+        Columns sourceColumn = columnsRepository.findById(requestDto.getSourceColumnId())
+                .orElseThrow(() -> new ResourceNotFoundException("Source Column not found"));
+
         Columns targetColumn = columnsRepository.findById(requestDto.getTargetColumnId())
                 .orElseThrow(() -> new ResourceNotFoundException("Target Column not found"));
 
         mapping.setTopic(topic);
-        mapping.setSourceColumn(requestDto.getSourceColumn());
+        mapping.setSourceColumn(sourceColumn);   // <-- FK
         mapping.setTargetColumn(targetColumn);
 
         Mapping updatedMapping = mappingRepository.save(mapping);
@@ -75,4 +85,3 @@ public class MappingService {
         mappingRepository.delete(mapping);
     }
 }
-
