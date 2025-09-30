@@ -199,7 +199,7 @@ public class DynamicKafkaConsumer {
                 throw new IllegalArgumentException("Primary key value missing for column: " + pkTarget);
             }
             pkValues.put(pkTarget, pkVal);
-            newValues.remove(pkTarget); // PK kolonlarını SET'ten çıkar
+            newValues.remove(pkTarget);
         }
 
         db.performUpdate(database, table, newValues, pkValues);
@@ -220,13 +220,11 @@ public class DynamicKafkaConsumer {
         db.performDelete(database, table, pkValues);
     }
 
-    // ---- Container lifecycle event listeners (disconnect → restart) ----
-
     @EventListener
     public void onConsumerStopped(org.springframework.kafka.event.ConsumerStoppedEvent e) {
         MessageListenerContainer c = e.getContainer(MessageListenerContainer.class);
         if (c == null) return;
-        if (!activeListeners.containsValue(c)) return; // sadece bizim dinamikler
+        if (!activeListeners.containsValue(c)) return;
 
         String topic = topicOf(c);
         var props = c.getContainerProperties();
@@ -270,7 +268,7 @@ public class DynamicKafkaConsumer {
         MessageListenerContainer c = e.getContainer(MessageListenerContainer.class);
         if (c == null) return;
 
-        String topic = topicOf(c); // senin sınıftaki helper: activeListeners'tan baksın
+        String topic = topicOf(c);
         var props = c.getContainerProperties();
 
         String info = (topic != null)
@@ -284,7 +282,7 @@ public class DynamicKafkaConsumer {
 
     private String topicOf(MessageListenerContainer c) {
         for (var e : activeListeners.entrySet()) {
-            if (e.getValue() == c) return e.getKey(); // referans eşitliği
+            if (e.getValue() == c) return e.getKey();
         }
         return null;
     }

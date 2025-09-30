@@ -1,31 +1,27 @@
-# ---------- Build Stage ----------
-FROM maven:3.9-eclipse-temurin-17 AS build
+# syntax=docker/dockerfile:1.6
+
+# ---------- Build Stage (Java 21) ----------
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
-# Bağımlılıkları önceden indir (cache dostu)
 COPY pom.xml .
-RUN mvn -q -B -DskipTests dependency:go-offline || true
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests dependency:go-offline || true
 
-# Kaynak kodu kopyala ve paketle
 COPY src ./src
-RUN mvn -q -B -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package
 
-# ---------- Runtime Stage ----------
-FROM registry.access.redhat.com/ubi9/openjdk-17-runtime:latest
+# ---------- Runtime Stage (Java 21) ----------
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:latest
 WORKDIR /opt/app
 
-USER 0
-COPY --from=build /workspace/target/*.jar /opt/app/app.jar
-RUN mkdir -p /opt/app/logs \
- && chown -R 185:0 /opt/app \
- && chmod -R g=u /opt/app
-
-# Tekrar non-root kullanıcıya dön
-USER 185
+# Jar'ı doğru sahiplikle kopyala; grup 0 + g=u => OpenShift arbitrary UID uyumlu
+COPY --chown=185:0 --from=build /workspace/target/*.jar /opt/app/app.jar
+RUN mkdir -p /opt/app/logs /tmp && chgrp -R 0 /opt/app /tmp && chmod -R g=u /opt/app /tmp
 
 ENV SERVER_PORT=8080 \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+HeapDumpOnOutOfMemoryError"
+    JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -Djava.security.egd=file:/dev/urandom" \
+    TMPDIR=/tmp
 
 EXPOSE 8080
 ENTRYPOINT ["sh","-c","java $JAVA_OPTS -Dserver.port=$SERVER_PORT -jar /opt/app/app.jar"]
