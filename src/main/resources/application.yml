@@ -33,6 +33,11 @@ spring:
           location: ${KAFKA_KEYSTORE_LOCATION}
           password: ${KAFKA_KEYSTORE_PASSWORD}
           type: PKCS12
+      reconnect.backoff.ms: 500
+      reconnect.backoff.max.ms: 30000
+      retry.backoff.ms: 1000
+      request.timeout.ms: 30000
+      session.timeout.ms: 15000
 
 main:
   banner-mode: "off"
