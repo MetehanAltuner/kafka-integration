@@ -1,5 +1,7 @@
 spring:
-  profiles: prod
+  config:
+    activate:
+      on-profile: prod
 
 management:
   endpoints:
@@ -10,7 +12,3 @@ management:
     health:
       probes:
         enabled: true
-
-hibernate:
-  boot:
-    allow_jdbc_metadata_access: false
