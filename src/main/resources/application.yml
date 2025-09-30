@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: kafka
+
+  datasource:
+    url: ${KAFKADB_URL}
+    username: ${KAFKADB_USERNAME}
+    password: ${KAFKADB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 30000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    open-in-view: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVER}
+    properties:
+      security.protocol: SSL
+      ssl:
+        truststore:
+          location: ${KAFKA_TRUSTSTORE_LOCATION}
+          password: ${KAFKA_TRUSTSTORE_PASSWORD}
+          type: PKCS12
+        keystore:
+          location: ${KAFKA_KEYSTORE_LOCATION}
+          password: ${KAFKA_KEYSTORE_PASSWORD}
+          type: PKCS12
+
+main:
+  banner-mode: "off"
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+hibernate:
+  boot:
+    allow_jdbc_metadata_access: false

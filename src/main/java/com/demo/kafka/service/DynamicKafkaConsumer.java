@@ -178,16 +178,16 @@ public class DynamicKafkaConsumer {
 
                 container.start();
                 activeListeners.put(topic, container);
-                System.out.println("Subscribed to topic: " + topic);
+                logger.info("Subscribed to topic: {}", topic);
             }
         }
     }
 
     public void processMessage(String topic, ConsumerRecord<String, String> record) {
-        System.out.println("Processing Topic: " + topic + " | Message: " + record.value());
+        logger.debug("Processing Topic: {} | Key: {} | Partition: {} | Offset: {}", topic, record.key(), record.partition(), record.offset());
 
         try {
-            logger.info("Processing message from topic: {}, key: {}, value: {}", topic, record.key(), record.value());
+            logger.debug("Processing message from topic: {}, key: {}, value: {}", topic, record.key(), record.value());
             JsonNode rootNode = objectMapper.readTree(record.value());
 
             String operation = rootNode.get("op").asText();
@@ -270,7 +270,7 @@ public class DynamicKafkaConsumer {
             }
 
             if (newValues.isEmpty()) {
-                logger.info("SNAPSHOT UPSERT skipped: no non-PK columns to update for table {}", table.getName());
+                logger.debug("SNAPSHOT UPSERT skipped: no non-PK columns to update for table {}", table.getName());
                 return;
             }
 
@@ -369,7 +369,7 @@ public class DynamicKafkaConsumer {
             }
 
             int inserted = q.executeUpdate();
-            logger.info("INSERT Operation - Inserted Rows: {}", inserted);
+            logger.debug("INSERT Operation - Inserted Rows: {}", inserted);
 
             em.getTransaction().commit();
         } catch (Exception e) {
@@ -382,7 +382,7 @@ public class DynamicKafkaConsumer {
 
     private void performUpdate(Database database, Tables table, Map<String, Object> values, Map<String, Object> pkValues) {
         if (values.isEmpty()) {
-            logger.info("UPDATE skipped: no non-PK columns to update for table {}", table.getName());
+            logger.debug("UPDATE skipped: no non-PK columns to update for table {}", table.getName());
             return;
         }
 
@@ -407,7 +407,7 @@ public class DynamicKafkaConsumer {
             for (Map.Entry<String, Object> e : pkValues.entrySet()) q.setParameter("pk_" + e.getKey(), e.getValue());
 
             int updated = q.executeUpdate();
-            logger.info("UPDATE {} - rows: {}", table.getName(), updated);
+            logger.debug("UPDATE {} - rows: {}", table.getName(), updated);
 
             em.getTransaction().commit();
         } catch (Exception e) {
@@ -435,7 +435,7 @@ public class DynamicKafkaConsumer {
             for (Map.Entry<String, Object> e : pkValues.entrySet()) q.setParameter("pk_" + e.getKey(), e.getValue());
 
             int deleted = q.executeUpdate();
-            logger.info("DELETE {} - rows: {}", table.getName(), deleted);
+            logger.debug("DELETE {} - rows: {}", table.getName(), deleted);
 
             em.getTransaction().commit();
         } catch (Exception e) {

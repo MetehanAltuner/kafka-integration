@@ -1,0 +1,16 @@
+spring:
+  profiles: prod
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+hibernate:
+  boot:
+    allow_jdbc_metadata_access: false
