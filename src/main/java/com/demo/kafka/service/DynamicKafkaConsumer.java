@@ -53,7 +53,6 @@ public class DynamicKafkaConsumer {
                 container.getContainerProperties().setIdleEventInterval(300_000L); // 5 dakika
 
                 container.setupMessageListener((MessageListener<String, String>) record -> {
-                    // Tombstone (value=null) ise atla
                     if (record.value() == null) {
                         logger.debug("Skipping tombstone for key {}", record.key());
                         return;
@@ -69,8 +68,8 @@ public class DynamicKafkaConsumer {
     }
 
     public void processMessage(String topic, ConsumerRecord<String, String> record) {
-        logger.debug("Processing Topic: {} | Key: {} | Partition: {} | Offset: {}",
-                topic, record.key(), record.partition(), record.offset());
+        logger.debug("Processing Topic: {} | Key: {} | Partition: {} | Offset: {} | Value: {}",
+                topic, record.key(), record.partition(), record.offset(), record.value());
 
         try {
             JsonNode rootNode = objectMapper.readTree(record.value());
