@@ -22,12 +22,12 @@ public class DatabaseConnectionUtil {
     }
 
     public EntityManager createEntityManager(Database database) {
-        String user = System.getenv("kafkadb.username");
-        String pass = System.getenv("kafkadb.password");
+        String user = System.getenv("KAFKADB_USERNAME");
+        String pass = System.getenv("KAFKADB_PASSWORD");
 
         if (user == null || user.isBlank() || pass == null || pass.isBlank()) {
             throw new IllegalStateException(
-                    "Environment variables kafkadb.username and kafkadb.password must be set.");
+                    "Environment variables KAFKADB_USERNAME and KAFKADB_PASSWORD must be set.");
         }
         String key = key(database, user);
         EntityManagerFactory emf = emfCache.computeIfAbsent(key, k -> buildEmf(database, user, pass));
