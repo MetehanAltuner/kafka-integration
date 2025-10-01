@@ -1,6 +1,7 @@
 package com.demo.kafka.service;
 
 import com.demo.kafka.common.helper.DbOpsHelper;
+import com.demo.kafka.common.kafka.TopicAutoCreator;
 import com.demo.kafka.feature.database.Database;
 import com.demo.kafka.feature.mapping.Mapping;
 import com.demo.kafka.feature.mapping.MappingRepository;
@@ -31,12 +32,14 @@ public class DynamicKafkaConsumer {
     private final ObjectMapper objectMapper;
     private final Map<String, MessageListenerContainer> activeListeners = new ConcurrentHashMap<>();
     private final DbOpsHelper db;
+    private final TopicAutoCreator topicAutoCreator;
 
     public DynamicKafkaConsumer(MappingRepository mappingsRepository,
                                 ConcurrentKafkaListenerContainerFactory<String, String> containerFactory,
-                                DbOpsHelper db) {
+                                DbOpsHelper db, TopicAutoCreator topicAutoCreator) {
         this.mappingsRepository = mappingsRepository;
         this.containerFactory = containerFactory;
+        this.topicAutoCreator = topicAutoCreator;
         this.objectMapper = new ObjectMapper();
         this.db = db;
     }
@@ -44,6 +47,9 @@ public class DynamicKafkaConsumer {
     public void subscribeToTopics(List<String> topics) {
         for (String topic : topics) {
             if (!activeListeners.containsKey(topic)) {
+
+                topicAutoCreator.ensureDltExists(topic);
+
                 var container = containerFactory.createContainer(topic);
                 container.setBeanName("dyn-" + topic);
                 container.getContainerProperties().setGroupId("dynamic-group");
@@ -56,7 +62,11 @@ public class DynamicKafkaConsumer {
                         logger.debug("Skipping tombstone for key {}", record.key());
                         return;
                     }
-                    processMessage(topic, record);
+                    try {
+                        processMessage(topic, record);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 });
 
                 container.start();
@@ -66,7 +76,7 @@ public class DynamicKafkaConsumer {
         }
     }
 
-    public void processMessage(String topic, ConsumerRecord<String, String> record) {
+    public void processMessage(String topic, ConsumerRecord<String, String> record) throws Exception {
         logger.debug("Processing Topic: {} | Key: {} | Partition: {} | Offset: {} | Value: {}",
                 topic, record.key(), record.partition(), record.offset(), record.value());
 
@@ -115,6 +125,7 @@ public class DynamicKafkaConsumer {
             logger.debug("Message processed OK (topic={}, offset={})", topic, record.offset());
         } catch (Exception e) {
             logger.error("Error processing message from topic: {}, value: {}", topic, record.value(), e);
+            throw e;
         }
     }
 
