@@ -38,6 +38,7 @@ public class DbOpsHelper {
     private static boolean isIntLike(String t)  { return t!=null && (t.startsWith("int") || t.equals("smallint") || t.equals("bigint")); }
     private static boolean isNumeric(String t)  { return t!=null && (t.equals("numeric") || t.equals("decimal")); }
     private static boolean isUuid(String t)     { return t!=null && t.equals("uuid"); }
+    private static boolean isGeometry(String t) { return t!=null && (t.equals("geometry") || t.equals("geography")); }
 
     private static long epochToMillis(long v){
         long av = Math.abs(v);
@@ -57,7 +58,7 @@ public class DbOpsHelper {
             if (v.isDouble()) return v.doubleValue();
             if (v.isBoolean()) return v.booleanValue();
             if (v.isTextual()) return v.textValue();
-            if (v.isObject() || v.isArray()) return v; // json/jsonb kolonları için
+            if (v.isObject() || v.isArray()) return v; // geometry/json/jsonb gibi karma tipler için ham node
             return v.toString();
         }
         return null;
@@ -72,7 +73,10 @@ public class DbOpsHelper {
         EntityManager em = dbUtil.createEntityManager(db);
         try {
             Object r = em.createNativeQuery("""
-                    SELECT data_type
+                    SELECT CASE
+                             WHEN data_type = 'USER-DEFINED' THEN udt_name
+                             ELSE data_type
+                           END AS real_type
                     FROM information_schema.columns
                     WHERE table_schema = :schema
                       AND table_name   = :table
@@ -88,11 +92,41 @@ public class DbOpsHelper {
         } finally { em.close(); }
     }
 
+    /** ==== Geometry holder ==== */
+    public static final class GeoVal {
+        public final String wkbBase64; // Debezium'dan gelen WKB base64
+        public final Integer srid;     // null olabilir
+        public GeoVal(String wkbBase64, Integer srid) {
+            this.wkbBase64 = wkbBase64;
+            this.srid = srid;
+        }
+    }
+
     /** ==== Type coercion ==== */
     public Object coerceForTarget(Database db, Tables table, String targetColumn, Object raw) {
         if (raw == null) return null;
         String schema = resolveSchema(table);
         String dt = getColumnDataType(db, schema, table.getName(), targetColumn);
+
+        // Geometry/geography özel durum
+        if (isGeometry(dt)) {
+            // Beklenen format: {"wkb":"...","srid":123}  (srid null olabilir)
+            if (raw instanceof JsonNode node) {
+                JsonNode wkb = node.get("wkb");
+                if (wkb != null && wkb.isTextual()) {
+                    Integer srid = null;
+                    JsonNode s = node.get("srid");
+                    if (s != null && !s.isNull()) {
+                        try { srid = s.isInt() ? s.intValue() : Integer.valueOf(s.asText()); }
+                        catch (Exception ignore) {}
+                    }
+                    return new GeoVal(wkb.textValue(), srid);
+                }
+            }
+            // Fallback: string geldiyse (WKT vs) burada WKT kabul etmiyoruz; string döndürmeyelim
+            logger.warn("Geometry column {} expects JSON with wkb/srid; got {}", targetColumn, raw.getClass().getSimpleName());
+            return null;
+        }
 
         if (raw instanceof Number n) {
             long v = n.longValue();
@@ -115,7 +149,7 @@ public class DbOpsHelper {
                 if (isBool(dt)) return ("true".equalsIgnoreCase(s) || "1".equals(s));
                 if (isNumeric(dt)) return new BigDecimal(s);
                 if (isUuid(dt)) return java.util.UUID.fromString(s);
-            } catch (Exception ignore) { /* bırak string gitsin */ }
+            } catch (Exception ignore) { /* string olarak kalsın */ }
             return s;
         }
         if (raw instanceof Boolean b) {
@@ -124,7 +158,7 @@ public class DbOpsHelper {
             return b;
         }
         if (raw instanceof JsonNode node) {
-            // json/jsonb için stringle; değilse de string olarak dene
+            // json/jsonb için stringle; geometry zaten yukarıda ele alındı
             return node.toString();
         }
         return raw;
@@ -145,6 +179,39 @@ public class DbOpsHelper {
             throw new IllegalArgumentException("Primary key column(s) not found for table mapping");
         }
         return pks;
+    }
+
+    /** ==== Column binding builder ==== */
+    private static final class SqlPiece {
+        String sql;                          // kolondaki değer ifadesi (ör. :col veya ST_GeomFromWKB(...))
+        Map<String,Object> params = new HashMap<>(); // bind edilecek parametreler
+    }
+
+    private SqlPiece buildValueSql(Database db, Tables table, String column, Object value) {
+        SqlPiece p = new SqlPiece();
+        String schema = resolveSchema(table);
+        String dt = getColumnDataType(db, schema, table.getName(), column);
+
+        if (value == null) {
+            p.sql = "NULL";
+            return p;
+        }
+
+        if (isGeometry(dt) && value instanceof GeoVal g) {
+            // ST_GeomFromWKB(decode(:col_wkb,'base64'), :col_srid)
+            String base = "ST_GeomFromWKB(decode(:%s_wkb,'base64')%s)";
+            String sid  = (g.srid != null) ? ", :%s_srid" : "";
+            String argSid = (g.srid != null) ? String.format(sid, column) : "";
+            p.sql = String.format(base, column, argSid);
+            p.params.put(column + "_wkb", g.wkbBase64);
+            if (g.srid != null) p.params.put(column + "_srid", g.srid);
+            return p;
+        }
+
+        // default: tek param
+        p.sql = ":" + column;
+        p.params.put(column, value);
+        return p;
     }
 
     /** ==== DB ops ==== */
@@ -177,12 +244,26 @@ public class DbOpsHelper {
         String schema = resolveSchema(table);
         try {
             em.getTransaction().begin();
-            String columns = values.keySet().stream().map(DbOpsHelper::quoteIdent).collect(Collectors.joining(", "));
-            String placeholders = values.keySet().stream().map(k -> ":" + k).collect(Collectors.joining(", "));
+
+            List<String> columns = new ArrayList<>();
+            List<String> valueSql = new ArrayList<>();
+            Map<String,Object> params = new HashMap<>();
+
+            for (var e : values.entrySet()) {
+                String col = e.getKey();
+                Object val = e.getValue();
+                columns.add(quoteIdent(col));
+                SqlPiece piece = buildValueSql(database, table, col, val);
+                valueSql.add(piece.sql);
+                params.putAll(piece.params);
+            }
+
             String sql = "INSERT INTO " + quoteIdent(schema) + "." + quoteIdent(table.getName())
-                    + " (" + columns + ") VALUES (" + placeholders + ")";
+                    + " (" + String.join(", ", columns) + ") VALUES (" + String.join(", ", valueSql) + ")";
+
             Query q = em.createNativeQuery(sql);
-            values.forEach(q::setParameter);
+            for (var p : params.entrySet()) q.setParameter(p.getKey(), p.getValue());
+
             int inserted = q.executeUpdate();
             em.getTransaction().commit();
             logger.debug("INSERT {} - rows: {}", table.getName(), inserted);
@@ -203,17 +284,29 @@ public class DbOpsHelper {
         String schema = resolveSchema(table);
         try {
             em.getTransaction().begin();
-            String setClause = values.keySet().stream()
-                    .map(col -> quoteIdent(col) + " = :" + col)
-                    .collect(Collectors.joining(", "));
+
+            List<String> setParts = new ArrayList<>();
+            Map<String,Object> params = new HashMap<>();
+
+            for (var e : values.entrySet()) {
+                String col = e.getKey();
+                Object val = e.getValue();
+                SqlPiece piece = buildValueSql(database, table, col, val);
+                setParts.add(quoteIdent(col) + " = " + piece.sql);
+                params.putAll(piece.params);
+            }
+
             String whereClause = pkValues.keySet().stream()
                     .map(pk -> quoteIdent(pk) + " = :pk_" + pk)
                     .collect(Collectors.joining(" AND "));
+
             String sql = "UPDATE " + quoteIdent(schema) + "." + quoteIdent(table.getName())
-                    + " SET " + setClause + " WHERE " + whereClause;
+                    + " SET " + String.join(", ", setParts) + " WHERE " + whereClause;
+
             Query q = em.createNativeQuery(sql);
-            values.forEach(q::setParameter);
+            for (var p : params.entrySet()) q.setParameter(p.getKey(), p.getValue());
             pkValues.forEach((k,v) -> q.setParameter("pk_" + k, v));
+
             int updated = q.executeUpdate();
             em.getTransaction().commit();
             logger.debug("UPDATE {} - rows: {}", table.getName(), updated);
