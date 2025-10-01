@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.listener.MessageListener;
 import org.springframework.kafka.listener.MessageListenerContainer;
@@ -218,72 +217,5 @@ public class DynamicKafkaConsumer {
             pkValues.put(pkTarget, pkVal);
         }
         db.performDelete(database, table, pkValues);
-    }
-
-    @EventListener
-    public void onConsumerStopped(org.springframework.kafka.event.ConsumerStoppedEvent e) {
-        MessageListenerContainer c = e.getContainer(MessageListenerContainer.class);
-        if (c == null) return;
-        if (!activeListeners.containsValue(c)) return;
-
-        String topic = topicOf(c);
-        var props = c.getContainerProperties();
-        String info = (topic != null)
-                ? topic
-                : (props.getTopics() != null ? String.join(",", props.getTopics())
-                : (props.getTopicPattern() != null ? props.getTopicPattern().pattern() : "?"));
-
-        logger.warn("Consumer stopped; restarting (topics={}, groupId={})", info, props.getGroupId());
-        try {
-            c.start();
-        } catch (Exception ex) {
-            logger.error("Restart failed (topics={})", info, ex);
-        }
-    }
-
-    @EventListener
-    public void onContainerStopped(org.springframework.kafka.event.ContainerStoppedEvent e) {
-        MessageListenerContainer c = e.getContainer(MessageListenerContainer.class);
-        if (c == null) return;
-        if (!activeListeners.containsValue(c)) return;
-
-        String topic = topicOf(c);
-        var props = c.getContainerProperties();
-        String info = (topic != null)
-                ? topic
-                : (props.getTopics() != null ? String.join(",", props.getTopics())
-                : (props.getTopicPattern() != null ? props.getTopicPattern().pattern() : "?"));
-
-        logger.warn("Container stopped; restarting (topics={}, groupId={})", info, props.getGroupId());
-        try {
-            c.start();
-        } catch (Exception ex) {
-            logger.error("Restart failed (topics={})", info, ex);
-        }
-    }
-
-
-    @EventListener
-    public void onNonResponsive(org.springframework.kafka.event.NonResponsiveConsumerEvent e) {
-        MessageListenerContainer c = e.getContainer(MessageListenerContainer.class);
-        if (c == null) return;
-
-        String topic = topicOf(c);
-        var props = c.getContainerProperties();
-
-        String info = (topic != null)
-                ? topic
-                : (props.getTopics() != null ? String.join(",", props.getTopics())
-                : (props.getTopicPattern() != null ? props.getTopicPattern().pattern() : "?"));
-
-        logger.warn("NonResponsiveConsumerEvent: topics={}, groupId={}", info, props.getGroupId());
-    }
-
-
-    private String topicOf(MessageListenerContainer c) {
-        for (var e : activeListeners.entrySet()) {
-            if (e.getValue() == c) return e.getKey();
-        }
-        return null;
     }
 }
