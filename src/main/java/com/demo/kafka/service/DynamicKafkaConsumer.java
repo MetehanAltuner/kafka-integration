@@ -63,6 +63,7 @@ public class DynamicKafkaConsumer {
                         return;
                     }
                     try {
+
                         processMessage(topic, record);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
